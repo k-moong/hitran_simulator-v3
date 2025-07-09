@@ -11,6 +11,7 @@ import pickle
 import hashlib
 from datetime import datetime
 import time
+from constants import HITRAN_MOLECULES
 
 class HitranCache:
     def __init__(self, cache_dir="cache/hitran_cache"):
@@ -144,7 +145,7 @@ class OptimizedHitranAPI:
         }
     
     def download_molecule_data(self, molecule, wavelength_min, wavelength_max, use_cache=True):
-        """분자 데이터 다운로드 (캐싱 지원)"""
+        """분자+동위원소 데이터 다운로드 (캐싱 지원)"""
         # 캐시 확인
         if use_cache and self.cache.is_cached(molecule, wavelength_min, wavelength_max):
             print(f"🚀 {molecule} 캐시에서 로드 중...")
@@ -152,37 +153,29 @@ class OptimizedHitranAPI:
             if data is not None:
                 print(f"✅ {molecule} 캐시 로드 완료! (라인 수: {len(data)})")
                 return data
-        
-        # 캐시에 없으면 다운로드
         try:
             wavenumber_min = 1e7 / wavelength_max
             wavenumber_max = 1e7 / wavelength_min
-            
-            print(f"📥 {molecule} 데이터 다운로드 중...")
-            
-            if molecule not in self.molecule_ids:
-                print(f"❌ 지원하지 않는 분자: {molecule}")
+            if molecule not in HITRAN_MOLECULES:
+                print(f"❌ 지원하지 않는 분자+동위원소: {molecule}")
                 return None
-            
-            molecule_id = self.molecule_ids[molecule]
+            info = HITRAN_MOLECULES[molecule]
+            molecule_id = info["id"]
+            iso_number = info["iso"]
+            print(f"📥 {info['name']} 데이터 다운로드 중...")
             hitran_query = hitran.Hitran()
-            
             data = hitran_query.query_lines(
-                molecule_number=molecule_id, 
-                isotopologue_number=1,
+                molecule_number=molecule_id,
+                isotopologue_number=iso_number,
                 min_frequency=wavenumber_min * u.cm**-1,
                 max_frequency=wavenumber_max * u.cm**-1
             )
-            
-            print(f"✅ {molecule} 데이터 다운로드 완료! (라인 수: {len(data)})")
-            
+            print(f"✅ {info['name']} 데이터 다운로드 완료! (라인 수: {len(data)})")
             # 캐시에 저장
             if use_cache:
                 if self.cache.save_to_cache(molecule, wavelength_min, wavelength_max, data):
-                    print(f"💾 {molecule} 데이터 캐시에 저장됨")
-            
+                    print(f"💾 {info['name']} 데이터 캐시에 저장됨")
             return data
-            
         except Exception as e:
             print(f"❌ 데이터 다운로드 실패: {e}")
             return None

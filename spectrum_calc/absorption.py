@@ -68,23 +68,35 @@ class SpectrumCalculator:
     
     def calculate_absorption_spectrum(self, hitran_data, frequency_grid, 
                                    temperature=296.15, pressure=1.0, 
-                                   concentration=1000e-6, path_length=1000.0, molecule="H2O"):
+                                   concentration=1000e-6, path_length=1000.0, molecule="H2O",
+                                   progress_bar=None, status_text=None, molecule_label=None):
         """
         흡수 스펙트럼 계산
-        
         Args:
             hitran_data: HITRAN 데이터 (astroquery 결과)
             frequency_grid: 주파수 격자 (cm^-1)
             temperature: 온도 (K)
             pressure: 압력 (atm)
-            concentration: 농도 (몰 분율)
+            concentration: 농도 (몰 분율 또는 dict)
             path_length: 경로 길이 (m)
-            molecule: 분자 이름
+            molecule: 분자 이름 또는 동위원소 키
+            progress_bar: Streamlit progress 객체 (st.progress)
+            status_text: Streamlit status 객체 (st.empty())
+            molecule_label: 진행률 메시지에 표시할 성분명(한글+동위원소)
         """
+        import time
+        start_time = time.time()
+        total_lines = len(hitran_data)
+        # 농도 dict 지원: 혼합 스펙트럼 모드에서 molecule별 농도 적용
+        if isinstance(concentration, dict):
+            conc_ppb = concentration.get(molecule, 1000.0)  # ppb 단위
+            conc = conc_ppb * 1e-9  # ppb → 몰분율 변환
+        else:
+            conc = concentration
         print(f"🧮 {molecule} 스펙트럼 계산 중...")
         print(f"   온도: {temperature} K")
         print(f"   압력: {pressure} atm")
-        print(f"   농도: {concentration*1e6:.1f} ppm")
+        print(f"   농도: {conc*1e9:.1f} ppb")
         print(f"   경로 길이: {path_length/1000:.1f} km")
         
         # 전체 흡수 계수 초기화
@@ -127,8 +139,23 @@ class SpectrumCalculator:
         
         # 각 HITRAN 라인에 대해 계산
         for i, line in enumerate(hitran_data):
-            if i % 1000 == 0:
-                print(f"   진행: {i}/{len(hitran_data)} 라인")
+            # 진행률/남은 시간 표시
+            if i % 100 == 0 or i == total_lines - 1:
+                percent = (i + 1) / total_lines
+                elapsed = time.time() - start_time
+                if i > 0:
+                    est_total = elapsed / (i + 1) * total_lines
+                    est_remain = est_total - elapsed
+                else:
+                    est_remain = 0
+                prefix = f"[{molecule_label}] " if molecule_label else ""
+                msg = f"{prefix}진행: {i+1}/{total_lines} ({percent*100:.1f}%), 남은 시간: {est_remain:0.1f}초"
+                if progress_bar is not None:
+                    progress_bar.progress(percent)
+                if status_text is not None:
+                    status_text.text(msg)
+                else:
+                    print(msg)
             
             # 라인 파라미터들
             center_freq = line['nu']  # 중심 주파수 (cm^-1)
@@ -145,7 +172,7 @@ class SpectrumCalculator:
             line_shape = self.voigt_profile(frequency_grid, center_freq, gamma_l, gamma_d)
             
             # 흡수 계수에 기여 추가 (스케일링 팩터 적용)
-            absorption_coeff += intensity * concentration * line_shape * 1e20
+            absorption_coeff += intensity * conc * line_shape * 1e20
         
         # Beer-Lambert 법칙: I = I0 * exp(-alpha * L)
         transmittance = np.exp(-absorption_coeff * path_length)

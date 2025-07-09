@@ -1,86 +1,86 @@
 # constants.py
-"""HITRAN 분자 정의 및 상수"""
+"""HITRAN 분자 및 동위원소 전체 목록 자동 생성 (base 키 보장)"""
 
-# HITRAN 전체 분자 목록 (분자 ID와 함께)
-HITRAN_MOLECULES = {
-    # 주요 대기 성분
-    "H2O": {"id": 1, "name": "물", "category": "주요 대기 성분", "common": True},
-    "CO2": {"id": 2, "name": "이산화탄소", "category": "주요 대기 성분", "common": True},
-    "O3": {"id": 3, "name": "오존", "category": "주요 대기 성분", "common": True},
-    "N2O": {"id": 4, "name": "아산화질소", "category": "주요 대기 성분", "common": True},
-    "CO": {"id": 5, "name": "일산화탄소", "category": "주요 대기 성분", "common": True},
-    "CH4": {"id": 6, "name": "메탄", "category": "주요 대기 성분", "common": True},
-    "O2": {"id": 7, "name": "산소", "category": "주요 대기 성분", "common": True},
-    "NO": {"id": 8, "name": "일산화질소", "category": "질소 화합물", "common": True},
-    "SO2": {"id": 9, "name": "이산화황", "category": "황 화합물", "common": True},
-    "NO2": {"id": 10, "name": "이산화질소", "category": "질소 화합물", "common": True},
-    "NH3": {"id": 11, "name": "암모니아", "category": "질소 화합물", "common": True},
-    "HNO3": {"id": 12, "name": "질산", "category": "질소 화합물", "common": True},
-    
-    # 할로겐 화합물
-    "OH": {"id": 13, "name": "하이드록실", "category": "라디칼", "common": False},
-    "HF": {"id": 14, "name": "플루오르화수소", "category": "할로겐 화합물", "common": False},
-    "HCl": {"id": 15, "name": "염화수소", "category": "할로겐 화합물", "common": False},
-    "HBr": {"id": 16, "name": "브롬화수소", "category": "할로겐 화합물", "common": False},
-    "HI": {"id": 17, "name": "요오드화수소", "category": "할로겐 화합물", "common": False},
-    "ClO": {"id": 18, "name": "염소 산화물", "category": "할로겐 화합물", "common": False},
-    "OCS": {"id": 19, "name": "황화카르보닐", "category": "황 화합물", "common": False},
-    "H2CO": {"id": 20, "name": "포름알데히드", "category": "유기 화합물", "common": False},
-    "HOCl": {"id": 21, "name": "차아염소산", "category": "할로겐 화합물", "common": False},
-    "N2": {"id": 22, "name": "질소", "category": "주요 대기 성분", "common": False},
-    "HCN": {"id": 23, "name": "시안화수소", "category": "유기 화합물", "common": False},
-    "CH3Cl": {"id": 24, "name": "염화메틸", "category": "할로겐 화합물", "common": False},
-    "H2O2": {"id": 25, "name": "과산화수소", "category": "산소 화합물", "common": False},
-    "C2H2": {"id": 26, "name": "아세틸렌", "category": "유기 화합물", "common": False},
-    "C2H6": {"id": 27, "name": "에탄", "category": "유기 화합물", "common": False},
-    "PH3": {"id": 28, "name": "포스핀", "category": "인 화합물", "common": False},
-    
-    # CFC 및 HCFC
-    "COF2": {"id": 29, "name": "플루오르화카르보닐", "category": "할로겐 화합물", "common": False},
-    "SF6": {"id": 30, "name": "육플루오르화황", "category": "황 화합물", "common": False},
-    "H2S": {"id": 31, "name": "황화수소", "category": "황 화합물", "common": False},
-    "HCOOH": {"id": 32, "name": "개미산", "category": "유기 화합물", "common": False},
-    "HO2": {"id": 33, "name": "하이드로퍼옥실", "category": "라디칼", "common": False},
-    "O": {"id": 34, "name": "산소 원자", "category": "라디칼", "common": False},
-    "ClONO2": {"id": 35, "name": "염소질산", "category": "할로겐 화합물", "common": False},
-    "NO+": {"id": 36, "name": "질산 이온", "category": "이온", "common": False},
-    "HOBr": {"id": 37, "name": "차아브롬산", "category": "할로겐 화합물", "common": False},
-    "C2H4": {"id": 38, "name": "에틸렌", "category": "유기 화합물", "common": False},
-    "CH3OH": {"id": 39, "name": "메탄올", "category": "유기 화합물", "common": False},
-    "CH3Br": {"id": 40, "name": "브롬화메틸", "category": "할로겐 화합물", "common": False},
-    "CH3CN": {"id": 41, "name": "아세토니트릴", "category": "유기 화합물", "common": False},
-    "CF4": {"id": 42, "name": "사플루오르화탄소", "category": "할로겐 화합물", "common": False},
-    "C4H2": {"id": 43, "name": "다이아세틸렌", "category": "유기 화합물", "common": False},
-    "HC3N": {"id": 44, "name": "시아노아세틸렌", "category": "유기 화합물", "common": False},
-    "H2": {"id": 45, "name": "수소", "category": "주요 대기 성분", "common": False},
-    "CS": {"id": 46, "name": "황화탄소", "category": "황 화합물", "common": False},
-    "SO3": {"id": 47, "name": "삼산화황", "category": "황 화합물", "common": False},
-    "C2N2": {"id": 48, "name": "시안겐", "category": "유기 화합물", "common": False},
-    "COCl2": {"id": 49, "name": "포스겐", "category": "할로겐 화합물", "common": False},
-    "SO": {"id": 50, "name": "황 산화물", "category": "황 화합물", "common": False},
-}
+# 공식 HITRAN 분자 및 동위원소 정보 (2024 기준)
+# (분자명, HITRAN ID, 동위원소 리스트, 한글명)
+HITRAN_MOLECULES_RAW = [
+    ("H2O", 1, [161, 162, 163, 181, 182, 183], "물"),
+    ("CO2", 2, [626, 636, 628, 627, 638, 637, 828], "이산화탄소"),
+    ("O3", 3, [666, 668, 686, 676, 646, 686], "오존"),
+    ("N2O", 4, [446, 456, 546, 448, 458], "아산화질소"),
+    ("CO", 5, [26, 28, 27, 36, 38, 37, 48, 46, 47], "일산화탄소"),
+    ("CH4", 6, [211, 311, 212, 312], "메탄"),
+    ("O2", 7, [66, 68, 67, 86, 76, 68], "산소"),
+    ("NO", 8, [46, 48, 56, 58], "일산화질소"),
+    ("SO2", 9, [626, 646, 628, 646, 628], "이산화황"),
+    ("NO2", 10, [646], "이산화질소"),
+    ("NH3", 11, [411, 421, 414, 441, 443], "암모니아"),
+    ("HNO3", 12, [646], "질산"),
+    ("OH", 13, [16, 18, 17], "하이드록실"),
+    ("HF", 14, [19], "플루오르화수소"),
+    ("HCl", 15, [15, 17], "염화수소"),
+    ("HBr", 16, [19, 81], "브롬화수소"),
+    ("HI", 17, [127], "요오드화수소"),
+    ("ClO", 18, [35, 37], "염소 산화물"),
+    ("OCS", 19, [622, 624, 632, 822, 832], "황화카르보닐"),
+    ("H2CO", 20, [126, 128, 129, 136], "포름알데히드"),
+    ("HOCl", 21, [165, 167], "차아염소산"),
+    ("N2", 22, [28, 29, 30], "질소"),
+    ("HCN", 23, [124, 125, 134, 135], "시안화수소"),
+    ("CH3Cl", 24, [235, 237, 133, 135], "염화메틸"),
+    ("H2O2", 25, [166], "과산화수소"),
+    ("C2H2", 26, [122, 123, 124, 125], "아세틸렌"),
+    ("C2H6", 27, [126, 128], "에탄"),
+    ("PH3", 28, [111, 112, 113], "포스핀"),
+    ("COF2", 29, [126], "플루오르화카르보닐"),
+    ("SF6", 30, [622], "육플루오르화황"),
+    ("H2S", 31, [121, 122, 123], "황화수소"),
+    ("HCOOH", 32, [126], "개미산"),
+    ("HO2", 33, [16, 18], "하이드로퍼옥실"),
+    ("O", 34, [16, 17, 18], "산소 원자"),
+    ("ClONO2", 35, [165, 167], "염소질산"),
+    ("NO+", 36, [46], "질산 이온"),
+    ("HOBr", 37, [179, 181], "차아브롬산"),
+    ("C2H4", 38, [126, 128], "에틸렌"),
+    ("CH3OH", 39, [112, 113], "메탄올"),
+    ("CH3Br", 40, [193, 195], "브롬화메틸"),
+    ("CH3CN", 41, [122, 123], "아세토니트릴"),
+    ("CF4", 42, [124], "사플루오르화탄소"),
+    ("C4H2", 43, [122], "다이아세틸렌"),
+    ("HC3N", 44, [124], "시아노아세틸렌"),
+    ("H2", 45, [11, 12, 13], "수소"),
+    ("CS", 46, [12, 13, 14], "황화탄소"),
+    ("SO3", 47, [626], "삼산화황"),
+    ("C2N2", 48, [124], "시안겐"),
+    ("COCl2", 49, [126], "포스겐"),
+    ("SO", 50, [66, 68], "황 산화물"),
+]
 
-# 분자 카테고리 정의
-MOLECULE_CATEGORIES = {
-    "주요 대기 성분": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "주요 대기 성분"],
-    "유기 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "유기 화합물"],
-    "할로겐 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "할로겐 화합물"],
-    "질소 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "질소 화합물"],
-    "황 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "황 화합물"],
-    "라디칼": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "라디칼"],
-    "인 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "인 화합물"],
-    "산소 화합물": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "산소 화합물"],
-    "이온": [mol for mol, info in HITRAN_MOLECULES.items() if info["category"] == "이온"],
-}
+# 전체 분자+동위원소 dict 자동 생성 (base 키 반드시 포함)
+HITRAN_MOLECULES = {}
+for mol, mid, isos, kor in HITRAN_MOLECULES_RAW:
+    for idx, iso in enumerate(isos, 1):
+        key = f"{mol}-{iso}"
+        HITRAN_MOLECULES[key] = {
+            "id": mid,
+            "iso": idx,
+            "iso_code": iso,
+            "name": f"{kor} ({mol}, {iso})",
+            "base": mol,  # base 키 반드시 포함
+            "kor": kor,
+        }
 
-# 파장 대역 바로가기 정보
+# 파장 대역 바로가기 정보 (HITRAN 지원 범위: 100nm ~ 1,000,000nm)
 WAVELENGTH_SHORTCUTS = {
+    # 근적외선 (NIR) 대역
     "NIR_H2O_1": {"min": 1350, "max": 1400, "description": "H2O 1차 배음대"},
     "NIR_H2O_2": {"min": 1500, "max": 1600, "description": "H2O 2차 배음대"},  
     "NIR_H2O_3": {"min": 1850, "max": 1950, "description": "H2O 3차 배음대"},
     "NIR_CH4": {"min": 1630, "max": 1680, "description": "CH4 2ν3 대역"},
     "NIR_CO2": {"min": 2000, "max": 2100, "description": "CO2 조합대역"},
     "NIR_NH3": {"min": 1500, "max": 1600, "description": "NH3 2ν1 대역"},
+    
+    # 중적외선 (MIR) 대역
     "MIR_H2O": {"min": 2500, "max": 3000, "description": "H2O 기본 진동"},
     "MIR_CO2": {"min": 4200, "max": 4400, "description": "CO2 ν3 대역"},
     "MIR_CH4": {"min": 3200, "max": 3400, "description": "CH4 ν3 대역"},
@@ -90,6 +90,21 @@ WAVELENGTH_SHORTCUTS = {
     "MIR_CO": {"min": 2100, "max": 2200, "description": "CO 기본 진동"},
     "MIR_NO": {"min": 1800, "max": 2000, "description": "NO 기본 진동"},
     "MIR_SO2": {"min": 1100, "max": 1400, "description": "SO2 ν1,ν3 대역"},
+    
+    # 원적외선 (FIR) 대역
+    "FIR_H2O": {"min": 50000, "max": 100000, "description": "H2O 회전 진동"},
+    "FIR_CO": {"min": 200000, "max": 500000, "description": "CO 회전 진동"},
+    "FIR_N2O": {"min": 100000, "max": 200000, "description": "N2O 회전 진동"},
+    
+    # 마이크로파 (MW) 대역
+    "MW_H2O": {"min": 500000, "max": 1000000, "description": "H2O 순수 회전"},
+    "MW_CO": {"min": 500000, "max": 1000000, "description": "CO 순수 회전"},
+    
+    # 특수 대역
+    "UV_VIS": {"min": 100, "max": 800, "description": "자외선-가시광선"},
+    "BROAD_NIR": {"min": 800, "max": 2500, "description": "광범위 근적외선"},
+    "BROAD_MIR": {"min": 2500, "max": 50000, "description": "광범위 중적외선"},
+    "BROAD_FIR": {"min": 50000, "max": 1000000, "description": "광범위 원적외선-마이크로파"},
 }
 
 # 기본 농도 설정 (ppb)
