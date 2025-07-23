@@ -242,78 +242,460 @@ def export_results(simulation_results: Dict[str, Any], wl_grid: list, config) ->
     
     col1, col2, col3 = st.columns(3)
     
+    # CSV 데이터 준비
+    csv_data = prepare_csv_data(simulation_results, wl_grid)
+    
+    # PNG 이미지 준비  
+    png_data = prepare_png_data(simulation_results, wl_grid, config)
+    
+    # PDF 리포트 준비
+    pdf_data = prepare_pdf_data(simulation_results, wl_grid, config)
+    
     with col1:
-        if st.button("📊 CSV 데이터 다운로드"):
-            export_to_csv(simulation_results, wl_grid, config)
+        if csv_data:
+            st.download_button(
+                label="📊 CSV 데이터 다운로드",
+                data=csv_data,
+                file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ CSV 데이터 생성 실패")
     
     with col2:
-        if st.button("📈 PNG 그래프 다운로드"):
-            export_to_png(simulation_results, wl_grid, config)
+        if png_data:
+            st.download_button(
+                label="📈 PNG 그래프 다운로드",
+                data=png_data,
+                file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.png",
+                mime="image/png",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ PNG 이미지 생성 실패")
     
     with col3:
-        if st.button("📄 PDF 리포트 다운로드"):
-            export_to_pdf(simulation_results, wl_grid, config)
+        if pdf_data:
+            st.download_button(
+                label="📄 PDF 리포트 다운로드", 
+                data=pdf_data,
+                file_name=f"hitran_report_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ PDF 리포트 생성 실패")
+
+def prepare_csv_data(simulation_results: Dict[str, Any], wl_grid: list):
+    """CSV 데이터 준비"""
+    import pandas as pd
+    
+    try:
+        # 모든 결과를 하나의 DataFrame으로 통합
+        data_dict = {'wavelength_nm': wl_grid}
+        
+        # 데이터 추가
+        for key, result in simulation_results.items():
+            if isinstance(result, dict) and 'absorbance' in result:
+                data_dict[f'{key}_absorbance'] = result['absorbance']
+            elif isinstance(result, dict) and 'transmittance' in result:
+                data_dict[f'{key}_transmittance'] = result['transmittance']
+        
+        if len(data_dict) == 1:  # wavelength_nm만 있는 경우
+            return None
+        
+        df = pd.DataFrame(data_dict)
+        return df.to_csv(index=False)
+        
+    except Exception as e:
+        return None
+
+def prepare_png_data(simulation_results: Dict[str, Any], wl_grid: list, config):
+    """PNG 이미지 데이터 준비"""
+    import matplotlib.pyplot as plt
+    import matplotlib.font_manager as fm
+    import numpy as np
+    import os
+    import io
+    
+    try:
+        # 한글 폰트 설정 (Windows 기본 폰트 사용)
+        try:
+            font_path = 'C:/Windows/Fonts/malgun.ttf'  # 맑은 고딕
+            if not os.path.exists(font_path):
+                font_path = 'C:/Windows/Fonts/gulim.ttc'  # 굴림
+            if os.path.exists(font_path):
+                fm.fontManager.addfont(font_path)
+                plt.rcParams['font.family'] = ['Malgun Gothic', 'DejaVu Sans']
+            plt.rcParams['axes.unicode_minus'] = False  # 마이너스 부호 깨짐 방지
+        except:
+            # 폰트 설정 실패시 영문 사용
+            plt.rcParams['font.family'] = ['DejaVu Sans']
+        
+        # matplotlib 사용으로 안정적인 PNG 생성
+        plt.figure(figsize=(12, 8))
+        
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+        
+        for i, (key, result) in enumerate(simulation_results.items()):
+            if isinstance(result, dict) and 'absorbance' in result:
+                # numpy 배열로 안전하게 변환
+                wl_array = np.array(wl_grid)
+                abs_array = np.array(result['absorbance'])
+                
+                plt.plot(wl_array, abs_array, 
+                        color=colors[i % len(colors)], 
+                        label=key, 
+                        linewidth=2)
+        
+        # 제목에서 한글 문제 방지를 위해 영문 사용
+        plt.title("HITRAN Simulation Spectrum", fontsize=16, fontweight='bold')
+        plt.xlabel("Wavelength (nm)", fontsize=14)
+        plt.ylabel("Absorbance", fontsize=14)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # PNG로 저장
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+        img_bytes = img_buffer.getvalue()
+        plt.close()  # 메모리 누수 방지
+        
+        return img_bytes
+        
+    except Exception as e:
+        return None
+
+def prepare_pdf_data(simulation_results: Dict[str, Any], wl_grid: list, config):
+    """PDF 리포트 데이터 준비"""
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.font_manager as fm
+    import io
+    import pandas as pd
+    import numpy as np
+    import os
+    from datetime import datetime
+    
+    try:
+        # 한글 폰트 설정 (Windows 기본 폰트 사용)
+        try:
+            font_path = 'C:/Windows/Fonts/malgun.ttf'  # 맑은 고딕
+            if not os.path.exists(font_path):
+                font_path = 'C:/Windows/Fonts/gulim.ttc'  # 굴림
+            if os.path.exists(font_path):
+                fm.fontManager.addfont(font_path)
+                plt.rcParams['font.family'] = ['Malgun Gothic', 'DejaVu Sans']
+        except:
+            # 폰트 설정 실패시 기본 폰트 사용 (한글은 영문으로 표시)
+            plt.rcParams['font.family'] = ['DejaVu Sans']
+        
+        # PDF 생성
+        pdf_buffer = io.BytesIO()
+        
+        with PdfPages(pdf_buffer) as pdf:
+            # 첫 번째 페이지: 요약 정보
+            fig, ax = plt.subplots(figsize=(8.5, 11))
+            ax.axis('off')
+            
+            # 제목
+            ax.text(0.5, 0.95, 'HITRAN CRDS Simulation Report', 
+                   fontsize=20, fontweight='bold', ha='center', transform=ax.transAxes)
+            
+            # 생성 일시
+            ax.text(0.5, 0.9, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 
+                   fontsize=12, ha='center', transform=ax.transAxes)
+            
+            # 시뮬레이션 조건
+            y_pos = 0.8
+            ax.text(0.1, y_pos, 'Simulation Parameters:', fontsize=16, fontweight='bold', transform=ax.transAxes)
+            y_pos -= 0.05
+            ax.text(0.1, y_pos, f'Mode: {config.mode}', fontsize=12, transform=ax.transAxes)
+            y_pos -= 0.04
+            ax.text(0.1, y_pos, f'Wavelength Range: {config.wavelength_min} - {config.wavelength_max} nm', 
+                   fontsize=12, transform=ax.transAxes)
+            y_pos -= 0.04
+            
+            # 결과 요약
+            y_pos -= 0.05
+            ax.text(0.1, y_pos, 'Results Summary:', fontsize=16, fontweight='bold', transform=ax.transAxes)
+            y_pos -= 0.05
+            
+            molecule_count = 0
+            for key, result in simulation_results.items():
+                if isinstance(result, dict) and 'absorbance' in result:
+                    molecule_count += 1
+                    # numpy 배열 안전하게 처리
+                    abs_data = np.array(result['absorbance'])
+                    if len(abs_data) > 0:
+                        max_abs = np.max(abs_data)
+                    else:
+                        max_abs = 0.0
+                    ax.text(0.1, y_pos, f'{key}: Max Absorbance = {max_abs:.6f}', 
+                           fontsize=12, transform=ax.transAxes)
+                    y_pos -= 0.04
+            
+            if molecule_count == 0:
+                ax.text(0.1, y_pos, 'No valid simulation data found', fontsize=12, transform=ax.transAxes)
+            
+            pdf.savefig(fig, bbox_inches='tight')
+            plt.close(fig)
+            
+            # 두 번째 페이지: 스펙트럼 그래프
+            if molecule_count > 0:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+                
+                for i, (key, result) in enumerate(simulation_results.items()):
+                    if isinstance(result, dict) and 'absorbance' in result:
+                        # numpy 배열로 안전하게 변환
+                        wl_array = np.array(wl_grid)
+                        abs_array = np.array(result['absorbance'])
+                        
+                        ax.plot(wl_array, abs_array, 
+                               color=colors[i % len(colors)], 
+                               label=key, 
+                               linewidth=2)
+                
+                ax.set_title("HITRAN Simulation Spectrum", fontsize=14, fontweight='bold')
+                ax.set_xlabel("Wavelength (nm)", fontsize=12)
+                ax.set_ylabel("Absorbance", fontsize=12)
+                ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                ax.grid(True, alpha=0.3)
+                
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close(fig)
+        
+        return pdf_buffer.getvalue()
+        
+    except Exception as e:
+        return None
 
 def export_to_csv(simulation_results: Dict[str, Any], wl_grid: list, config) -> None:
     """CSV 데이터 내보내기"""
     import pandas as pd
     
-    # 모든 결과를 하나의 DataFrame으로 통합
-    data_dict = {'wavelength_nm': wl_grid}
-    
-    for key, result in simulation_results.items():
-        if isinstance(result, dict) and 'absorbance' in result:
-            data_dict[f'{key}_absorbance'] = result['absorbance']
-    
-    df = pd.DataFrame(data_dict)
-    
-    # CSV 다운로드
-    csv = df.to_csv(index=False)
-    st.download_button(
-        label="📥 CSV 파일 다운로드",
-        data=csv,
-        file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.csv",
-        mime="text/csv"
-    )
+    try:
+        # 모든 결과를 하나의 DataFrame으로 통합
+        data_dict = {'wavelength_nm': wl_grid}
+        
+        # 데이터 추가
+        for key, result in simulation_results.items():
+            if isinstance(result, dict) and 'absorbance' in result:
+                data_dict[f'{key}_absorbance'] = result['absorbance']
+            elif isinstance(result, dict) and 'transmittance' in result:
+                data_dict[f'{key}_transmittance'] = result['transmittance']
+        
+        if len(data_dict) == 1:  # wavelength_nm만 있는 경우
+            st.error("❌ 내보낼 시뮬레이션 데이터가 없습니다.")
+            return
+        
+        df = pd.DataFrame(data_dict)
+        
+        # CSV 다운로드
+        csv = df.to_csv(index=False)
+        st.download_button(
+            label="📥 CSV 파일 다운로드",
+            data=csv,
+            file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.csv",
+            mime="text/csv"
+        )
+        st.success("✅ CSV 파일 준비 완료!")
+        
+    except Exception as e:
+        st.error(f"❌ CSV 생성 중 오류가 발생했습니다: {str(e)}")
+        st.info("시뮬레이션을 다시 실행해 주세요.")
 
 def export_to_png(simulation_results: Dict[str, Any], wl_grid: list, config) -> None:
     """PNG 그래프 내보내기"""
-    import plotly.graph_objects as go
-    import plotly.io as pio
+    import matplotlib.pyplot as plt
+    import matplotlib.font_manager as fm
+    import numpy as np
+    import os
+    import io
     
-    # 현재 시각화를 PNG로 변환
-    fig = go.Figure()
-    
-    colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
-    
-    for i, (key, result) in enumerate(simulation_results.items()):
-        if isinstance(result, dict) and 'absorbance' in result:
-            fig.add_trace(
-                go.Scatter(
-                    x=wl_grid,
-                    y=result['absorbance'],
-                    name=key,
-                    line=dict(color=colors[i % len(colors)])
-                )
-            )
-    
-    fig.update_layout(
-        title=f"HITRAN Simulation - {config.mode}",
-        xaxis_title="파장 (nm)",
-        yaxis_title="흡광도",
-        height=600
-    )
-    
-    # PNG 다운로드
-    img_bytes = pio.to_image(fig, format="png")
-    st.download_button(
-        label="📥 PNG 파일 다운로드",
-        data=img_bytes,
-        file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.png",
-        mime="image/png"
-    )
+    try:
+        # 한글 폰트 설정 (Windows 기본 폰트 사용)
+        try:
+            font_path = 'C:/Windows/Fonts/malgun.ttf'  # 맑은 고딕
+            if not os.path.exists(font_path):
+                font_path = 'C:/Windows/Fonts/gulim.ttc'  # 굴림
+            if os.path.exists(font_path):
+                fm.fontManager.addfont(font_path)
+                plt.rcParams['font.family'] = ['Malgun Gothic', 'DejaVu Sans']
+            plt.rcParams['axes.unicode_minus'] = False  # 마이너스 부호 깨짐 방지
+        except:
+            # 폰트 설정 실패시 영문 사용
+            plt.rcParams['font.family'] = ['DejaVu Sans']
+        
+        # matplotlib 사용으로 안정적인 PNG 생성
+        plt.figure(figsize=(12, 8))
+        
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+        
+        for i, (key, result) in enumerate(simulation_results.items()):
+            if isinstance(result, dict) and 'absorbance' in result:
+                # numpy 배열로 안전하게 변환
+                wl_array = np.array(wl_grid)
+                abs_array = np.array(result['absorbance'])
+                
+                plt.plot(wl_array, abs_array, 
+                        color=colors[i % len(colors)], 
+                        label=key, 
+                        linewidth=2)
+        
+        # 제목에서 한글 문제 방지를 위해 영문 사용
+        plt.title("HITRAN Simulation Spectrum", fontsize=16, fontweight='bold')
+        plt.xlabel("Wavelength (nm)", fontsize=14)
+        plt.ylabel("Absorbance", fontsize=14)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # PNG로 저장
+        img_buffer = io.BytesIO()
+        plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+        img_bytes = img_buffer.getvalue()
+        plt.close()  # 메모리 누수 방지
+        
+        st.download_button(
+            label="📥 PNG File Download",
+            data=img_bytes,
+            file_name=f"hitran_simulation_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.png",
+            mime="image/png"
+        )
+        st.success("✅ PNG File Ready!")
+        
+    except Exception as e:
+        st.error(f"❌ PNG generation error: {str(e)}")
+        st.info("📊 Please use CSV download instead.")
+        
+        # 디버그 정보 추가
+        with st.expander("🔍 Debug Information"):
+            st.write(f"Error details: {type(e).__name__}: {str(e)}")
+            st.write(f"Simulation results keys: {list(simulation_results.keys())}")
+            st.write(f"Wavelength grid length: {len(wl_grid) if wl_grid else 0}")
 
 def export_to_pdf(simulation_results: Dict[str, Any], wl_grid: list, config) -> None:
     """PDF 리포트 내보내기"""
-    st.info("📄 PDF 리포트 기능은 향후 업데이트 예정입니다.")
-    st.write("현재는 CSV와 PNG 다운로드를 이용해주세요.") 
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.font_manager as fm
+    import io
+    import pandas as pd
+    import numpy as np
+    import os
+    from datetime import datetime
+    
+    try:
+        # 한글 폰트 설정 (Windows 기본 폰트 사용)
+        try:
+            font_path = 'C:/Windows/Fonts/malgun.ttf'  # 맑은 고딕
+            if not os.path.exists(font_path):
+                font_path = 'C:/Windows/Fonts/gulim.ttc'  # 굴림
+            if os.path.exists(font_path):
+                fm.fontManager.addfont(font_path)
+                plt.rcParams['font.family'] = ['Malgun Gothic', 'DejaVu Sans']
+        except:
+            # 폰트 설정 실패시 기본 폰트 사용 (한글은 영문으로 표시)
+            plt.rcParams['font.family'] = ['DejaVu Sans']
+        
+        # PDF 생성
+        pdf_buffer = io.BytesIO()
+        
+        with PdfPages(pdf_buffer) as pdf:
+            # 첫 번째 페이지: 요약 정보
+            fig, ax = plt.subplots(figsize=(8.5, 11))
+            ax.axis('off')
+            
+            # 제목
+            ax.text(0.5, 0.95, 'HITRAN CRDS Simulation Report', 
+                   fontsize=20, fontweight='bold', ha='center', transform=ax.transAxes)
+            
+            # 생성 일시
+            ax.text(0.5, 0.9, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 
+                   fontsize=12, ha='center', transform=ax.transAxes)
+            
+            # 시뮬레이션 조건
+            y_pos = 0.8
+            ax.text(0.1, y_pos, 'Simulation Parameters:', fontsize=16, fontweight='bold', transform=ax.transAxes)
+            y_pos -= 0.05
+            ax.text(0.1, y_pos, f'Mode: {config.mode}', fontsize=12, transform=ax.transAxes)
+            y_pos -= 0.04
+            ax.text(0.1, y_pos, f'Wavelength Range: {config.wavelength_min} - {config.wavelength_max} nm', 
+                   fontsize=12, transform=ax.transAxes)
+            y_pos -= 0.04
+            
+            # 결과 요약
+            y_pos -= 0.05
+            ax.text(0.1, y_pos, 'Results Summary:', fontsize=16, fontweight='bold', transform=ax.transAxes)
+            y_pos -= 0.05
+            
+            molecule_count = 0
+            for key, result in simulation_results.items():
+                if isinstance(result, dict) and 'absorbance' in result:
+                    molecule_count += 1
+                    # numpy 배열 안전하게 처리
+                    abs_data = np.array(result['absorbance'])
+                    if len(abs_data) > 0:
+                        max_abs = np.max(abs_data)
+                    else:
+                        max_abs = 0.0
+                    ax.text(0.1, y_pos, f'{key}: Max Absorbance = {max_abs:.6f}', 
+                           fontsize=12, transform=ax.transAxes)
+                    y_pos -= 0.04
+            
+            if molecule_count == 0:
+                ax.text(0.1, y_pos, 'No valid simulation data found', fontsize=12, transform=ax.transAxes)
+            
+            pdf.savefig(fig, bbox_inches='tight')
+            plt.close(fig)
+            
+            # 두 번째 페이지: 스펙트럼 그래프
+            if molecule_count > 0:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                
+                colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+                
+                for i, (key, result) in enumerate(simulation_results.items()):
+                    if isinstance(result, dict) and 'absorbance' in result:
+                        # numpy 배열로 안전하게 변환
+                        wl_array = np.array(wl_grid)
+                        abs_array = np.array(result['absorbance'])
+                        
+                        ax.plot(wl_array, abs_array, 
+                               color=colors[i % len(colors)], 
+                               label=key, 
+                               linewidth=2)
+                
+                ax.set_title("HITRAN Simulation Spectrum", fontsize=14, fontweight='bold')
+                ax.set_xlabel("Wavelength (nm)", fontsize=12)
+                ax.set_ylabel("Absorbance", fontsize=12)
+                ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+                ax.grid(True, alpha=0.3)
+                
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close(fig)
+        
+        pdf_bytes = pdf_buffer.getvalue()
+        
+        st.download_button(
+            label="📥 PDF Report Download",
+            data=pdf_bytes,
+            file_name=f"hitran_report_{config.mode.replace(' ', '_')}_{config.wavelength_min}_{config.wavelength_max}nm.pdf",
+            mime="application/pdf"
+        )
+        st.success("✅ PDF Report Ready!")
+        
+    except Exception as e:
+        st.error(f"❌ PDF generation error: {str(e)}")
+        st.info("📊 Please use CSV or PNG download instead.")
+        
+        # 디버그 정보 추가
+        with st.expander("🔍 Debug Information"):
+            st.write(f"Error details: {type(e).__name__}: {str(e)}")
+            st.write(f"Simulation results keys: {list(simulation_results.keys())}")
+            st.write(f"Wavelength grid length: {len(wl_grid) if wl_grid else 0}") 

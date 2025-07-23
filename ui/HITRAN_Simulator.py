@@ -916,6 +916,14 @@ def main():
     if st.button(btn_text, type="primary"):
         with st.spinner('계산 중...'):
             results, wl_grid = run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points)
+            
+            # session state에 결과 저장 (내보내기 기능용)
+            st.session_state.simulation_results = results
+            st.session_state.wl_grid = wl_grid
+            st.session_state.mode = mode
+            st.session_state.wavelength_min = wl_min
+            st.session_state.wavelength_max = wl_max
+            
             show_results(results, wl_grid, mode, molecule, spectrometer_mode, oa_icos_params, matrix_gas_params, molecule_concentrations)
 
     # 새로운 고급 기능들
@@ -976,15 +984,22 @@ def main():
     
     with tab4:
         # 결과 내보내기
-        if 'results' in locals() and results:
+        if ('simulation_results' in st.session_state and st.session_state.simulation_results and 
+            'wl_grid' in st.session_state and st.session_state.wl_grid is not None):
             config = type('Config', (), {
-                'mode': mode,
-                'wavelength_min': wl_min,
-                'wavelength_max': wl_max
+                'mode': st.session_state.get('mode', '기본 모드'),
+                'wavelength_min': st.session_state.get('wavelength_min', wl_min),
+                'wavelength_max': st.session_state.get('wavelength_max', wl_max)
             })()
-            export_results(results, wl_grid, config)
+            export_results(st.session_state.simulation_results, st.session_state.wl_grid, config)
         else:
             st.info("💡 시뮬레이션을 먼저 실행한 후 내보내기 기능을 사용하세요.")
+            if 'simulation_results' in st.session_state:
+                st.write("🔍 디버그 정보:")
+                st.write(f"- simulation_results 존재: {'simulation_results' in st.session_state}")
+                st.write(f"- wl_grid 존재: {'wl_grid' in st.session_state}")
+                if 'wl_grid' in st.session_state:
+                    st.write(f"- wl_grid 길이: {len(st.session_state.wl_grid) if st.session_state.wl_grid else 0}")
 
     # Line Shape 비교 시뮬레이션
     show_line_shape_comparison()
