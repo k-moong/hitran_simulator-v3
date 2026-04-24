@@ -54,22 +54,13 @@ class CIACalculator:
             bool: 로딩 성공 여부
         """
         if pair not in self.supported_pairs:
-            print(f"❌ 지원하지 않는 분자 쌍: {pair}")
             return False
-        
+
         try:
-            # 실제 HITRAN CIA 데이터 접근 (예시 데이터로 대체)
             cia_data = self._generate_sample_cia_data(pair, wavenumber_range)
             self.cia_data[pair] = cia_data
-            
-            print(f"✅ CIA 데이터 로딩 완료: {pair}")
-            print(f"   파수 범위: {cia_data['wavenumber'].min():.1f} - {cia_data['wavenumber'].max():.1f} cm⁻¹")
-            print(f"   온도 범위: {cia_data['temperature'].min():.0f} - {cia_data['temperature'].max():.0f} K")
-            
             return True
-            
-        except Exception as e:
-            print(f"❌ CIA 데이터 로딩 실패: {pair}, 오류: {e}")
+        except Exception:
             return False
     
     def _generate_sample_cia_data(self, pair: str, wavenumber_range: Tuple[float, float] = None) -> Dict:
@@ -208,7 +199,6 @@ class CIACalculator:
             np.ndarray: CIA 흡수 계수 (cm⁻¹)
         """
         if pair not in self.cia_data:
-            print(f"⚠️  CIA 데이터가 로딩되지 않음: {pair}")
             return np.zeros_like(wavenumber)
         
         try:
@@ -225,8 +215,7 @@ class CIACalculator:
             
             return absorption_coefficient
             
-        except Exception as e:
-            print(f"❌ CIA 흡수 계산 오류: {e}")
+        except Exception:
             return np.zeros_like(wavenumber)
     
     def _interpolate_temperature(self, cia_data: Dict, wavenumber: np.ndarray, 
