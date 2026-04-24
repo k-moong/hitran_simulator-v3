@@ -25,6 +25,17 @@ from ui.components.data_upload import upload_experimental_data, overlay_experime
 from ui.components.line_info import create_interactive_spectrum_with_tooltips, show_line_details_panel, create_advanced_line_analysis
 from ui.components.parameter_sweep import show_parameter_sweep_panel, run_parameter_sweep, visualize_sweep_results
 
+# CIA 모듈
+try:
+    from ui.components.cia_component import (
+        show_cia_settings, calculate_cia_contribution, show_cia_analysis, 
+        combine_cia_with_line_absorption, show_cia_info, create_cia_demo
+    )
+    CIA_ENABLED = True
+except ImportError as e:
+    print(f"⚠️ CIA 모듈 로딩 실패: {e}")
+    CIA_ENABLED = False
+
 # --- 유틸 함수들 (최상단에 한 번만 정의) ---
 def to_subscript(s):
     """숫자를 아래첨자로 변환"""
@@ -347,9 +358,15 @@ def show_sidebar():
         molecules = None
         molecule_concentrations = None
     
-    return spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points
+    # CIA 설정 추가
+    if CIA_ENABLED:
+        cia_config = show_cia_settings()
+    else:
+        cia_config = None
+    
+    return spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points, cia_config
 
-def run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule=None, c_min=None, c_max=None, c_steps=None, oa_icos_params=None, path=1000.0, matrix_gas_params=None, molecule_concentrations=None, num_points=10000):
+def run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule=None, c_min=None, c_max=None, c_steps=None, oa_icos_params=None, path=1000.0, matrix_gas_params=None, molecule_concentrations=None, num_points=10000, cia_config=None):
     """시뮬레이션 실행 함수 (혼합/농도별 분석, OA-ICOS/기본 모드, Matrix Gas 효과 지원)"""
     api = HitranAPI()
     calc = SpectrumCalculator()
@@ -453,7 +470,10 @@ def run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, mol
                 )
                 spec['wavelength'] = wl_grid
                 results[c] = spec
-                max_abs.append(np.max(spec['absorbance']))
+                if isinstance(spec, dict) and 'absorbance' in spec:
+                    max_abs.append(np.max(spec['absorbance']))
+                else:
+                    max_abs.append(0.0)  # 기본값
                 
                 # OA-ICOS 시뮬레이션 (모드가 선택된 경우)
                 if oa_icos_sim and oa_icos_params:
@@ -495,6 +515,47 @@ def run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, mol
                 }
         progress_bar.empty()
         status_text.empty()
+    
+    # CIA (Collision-Induced Absorption) 계산 추가
+    if CIA_ENABLED and cia_config and cia_config['enabled']:
+        try:
+            # 농도 딕셔너리 구성
+            concentrations_dict = {}
+            if isinstance(molecule_concentrations, dict):
+                for mol, conc in molecule_concentrations.items():
+                    # 분자명을 CIA에서 사용하는 형식으로 변환
+                    if mol == 'H2O':
+                        concentrations_dict['H2O'] = conc
+                    elif mol == 'CO2':
+                        concentrations_dict['CO2'] = conc
+                    elif mol == 'CH4':
+                        concentrations_dict['CH4'] = conc
+                    elif mol == 'N2O':
+                        concentrations_dict['N2O'] = conc
+                    elif mol == 'CO':
+                        concentrations_dict['CO'] = conc
+                    elif mol == 'O2':
+                        concentrations_dict['O2'] = conc
+                    elif mol == 'NO':
+                        concentrations_dict['NO'] = conc
+            
+            # 대기 구성 요소 기본값 추가 (CIA 계산에 필요)
+            concentrations_dict.setdefault('N2', 780000000)  # 78% in ppb
+            concentrations_dict.setdefault('O2', 210000000)  # 21% in ppb
+            concentrations_dict.setdefault('H2', 500)  # 기본 H2 농도 in ppb
+            concentrations_dict.setdefault('He', 5240)  # 기본 He 농도 in ppb
+            
+            cia_results = calculate_cia_contribution(
+                cia_config, wl_grid, temp, concentrations_dict, pressure_atm, path
+            )
+            
+            if cia_results:
+                results['cia'] = cia_results
+                st.success(f"✅ CIA 계산 완료: {len(cia_results)}개 분자 쌍")
+                
+        except Exception as e:
+            st.warning(f"⚠️ CIA 계산 중 오류: {e}")
+    
     return results, wl_grid
 
 def show_results(results, wl_grid, mode, molecule=None, spectrometer_mode=None, oa_icos_params=None, matrix_gas_params=None, molecule_concentrations=None):
@@ -562,24 +623,34 @@ def show_results(results, wl_grid, mode, molecule=None, spectrometer_mode=None, 
         
         # 개별 분자 스펙트럼
         for i, (mol, spec) in enumerate(results.items()):
-            if mol in ['combined', 'combined_oa_icos'] or mol.endswith('_oa_icos'):
+            if mol in ['combined', 'combined_oa_icos', 'cia'] or mol.endswith('_oa_icos'):
                 continue
-            fig.add_trace(
-                go.Scatter(x=wl_grid, y=spec['absorbance'],
-                          name=get_molecule_label(mol),
-                          line=dict(color=colors[i % len(colors)])),
-                row=1, col=1
-            )
+            
+            # 안전한 키 접근 - absorbance 키가 있는지 확인
+            if isinstance(spec, dict) and 'absorbance' in spec:
+                fig.add_trace(
+                    go.Scatter(x=wl_grid, y=spec['absorbance'],
+                              name=get_molecule_label(mol),
+                              line=dict(color=colors[i % len(colors)])),
+                    row=1, col=1
+                )
+            else:
+                print(f"⚠️ {mol}: 'absorbance' 키가 없거나 잘못된 데이터 구조입니다.")
+                if isinstance(spec, dict):
+                    print(f"   사용 가능한 키들: {list(spec.keys())}")
+                else:
+                    print(f"   데이터 타입: {type(spec)}")
         
         # OA-ICOS 비교 (모드가 선택된 경우)
         if is_oa_icos and 'combined_oa_icos' in results:
             # 기본 vs OA-ICOS 혼합 스펙트럼 비교
-            fig.add_trace(
-                go.Scatter(x=wl_grid, y=results['combined']['absorbance'],
-                          name='기본 HITRAN (혼합)', 
-                          line=dict(color='darkblue', width=3, dash='solid')),
-                row=2, col=1
-            )
+            if 'combined' in results and isinstance(results['combined'], dict) and 'absorbance' in results['combined']:
+                fig.add_trace(
+                    go.Scatter(x=wl_grid, y=results['combined']['absorbance'],
+                              name='기본 HITRAN (혼합)', 
+                              line=dict(color='darkblue', width=3, dash='solid')),
+                    row=2, col=1
+                )
             fig.add_trace(
                 go.Scatter(x=wl_grid, y=results['combined_oa_icos']['absorbance'],
                           name=f'OA-ICOS 향상 (혼합, {line_shape_used})', 
@@ -628,14 +699,17 @@ def show_results(results, wl_grid, mode, molecule=None, spectrometer_mode=None, 
                 colors = ['darkblue', 'blue', 'lightblue', 'green', 'yellow', 'orange', 'red', 'darkred']
                 
                 for i, (c, spec) in enumerate(results.items()):
-                    if c in ['analysis', 'oa_icos_analysis'] or c.endswith('_oa_icos'):
+                    if c in ['analysis', 'oa_icos_analysis', 'cia'] or c.endswith('_oa_icos'):
                         continue
-                    color_idx = int(i * (len(colors)-1) / (len([k for k in results.keys() if not k.endswith('_oa_icos') and k not in ['analysis', 'oa_icos_analysis']])-1))
-                    fig1.add_trace(
-                        go.Scatter(x=wl_grid, y=spec['absorbance'],
-                                  name=f'{c:.1f} ppb',
-                                  line=dict(color=colors[color_idx]))
-                    )
+                    
+                    # 안전한 키 접근
+                    if isinstance(spec, dict) and 'absorbance' in spec:
+                        color_idx = int(i * (len(colors)-1) / (len([k for k in results.keys() if not k.endswith('_oa_icos') and k not in ['analysis', 'oa_icos_analysis', 'cia']])-1))
+                        fig1.add_trace(
+                            go.Scatter(x=wl_grid, y=spec['absorbance'],
+                                      name=f'{c:.1f} ppb',
+                                      line=dict(color=colors[color_idx]))
+                        )
                 
                 fig1.update_layout(title="농도별 스펙트럼 (기본)", xaxis_title="파장 (nm)", 
                                   yaxis_title="흡광도", height=400)
@@ -670,10 +744,12 @@ def show_results(results, wl_grid, mode, molecule=None, spectrometer_mode=None, 
                     fig3 = go.Figure()
                     
                     for i, (c, oa_spec) in enumerate(oa_icos_results.items()):
-                        color_idx = int(i * (len(colors)-1) / (len(oa_icos_results)-1))
-                        fig3.add_trace(
-                            go.Scatter(x=wl_grid, y=oa_spec['absorbance'],
-                                      name=f'{c.replace("_oa_icos", "")} ppb',
+                        # 안전한 키 접근
+                        if isinstance(oa_spec, dict) and 'absorbance' in oa_spec:
+                            color_idx = int(i * (len(colors)-1) / (len(oa_icos_results)-1))
+                            fig3.add_trace(
+                                go.Scatter(x=wl_grid, y=oa_spec['absorbance'],
+                                          name=f'{c.replace("_oa_icos", "")} ppb',
                                       line=dict(color=colors[color_idx]))
                         )
                     
@@ -714,14 +790,17 @@ def show_results(results, wl_grid, mode, molecule=None, spectrometer_mode=None, 
                 colors = ['darkblue', 'blue', 'lightblue', 'green', 'yellow', 'orange', 'red', 'darkred']
                 
                 for i, (c, spec) in enumerate(results.items()):
-                    if c == 'analysis':
+                    if c in ['analysis', 'cia']:
                         continue
-                    color_idx = int(i * (len(colors)-1) / (len(results)-2))
-                    fig1.add_trace(
-                        go.Scatter(x=wl_grid, y=spec['absorbance'],
-                                  name=f'{c:.1f} ppb',
-                                  line=dict(color=colors[color_idx]))
-                    )
+                    
+                    # 안전한 키 접근
+                    if isinstance(spec, dict) and 'absorbance' in spec:
+                        color_idx = int(i * (len(colors)-1) / (len(results)-2))
+                        fig1.add_trace(
+                            go.Scatter(x=wl_grid, y=spec['absorbance'],
+                                      name=f'{c:.1f} ppb',
+                                      line=dict(color=colors[color_idx]))
+                        )
                 
                 fig1.update_layout(title="농도별 스펙트럼", xaxis_title="파장 (nm)", 
                                   yaxis_title="흡광도", height=400)
@@ -880,7 +959,7 @@ def main():
     st.set_page_config(page_title="HITRAN Simulator (2025-07-09)", page_icon="🔬", layout="wide")
     st.title("🔬 HITRAN Simulator (2025-07-09)")
 
-    spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points = show_sidebar()
+    spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points, cia_config = show_sidebar()
     # 설정 요약 한 줄로 표시
     summary = f"모드: {spectrometer_mode}, 분석: {mode}, 온도: {temp}K, 파장: {wl_min}~{wl_max} nm, 경로: {path:.1f}m, 해상도: {num_points:,} 포인트"
     if oa_icos_params:
@@ -915,7 +994,7 @@ def main():
     btn_text = "🧮 혼합 스펙트럼 계산" if mode == "🧪 혼합 스펙트럼" else "📈 농도별 분석 실행"
     if st.button(btn_text, type="primary"):
         with st.spinner('계산 중...'):
-            results, wl_grid = run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points)
+            results, wl_grid = run_simulation(spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points, cia_config)
             
             # session state에 결과 저장 (내보내기 기능용)
             st.session_state.simulation_results = results
@@ -931,7 +1010,7 @@ def main():
     st.subheader("🚀 고급 분석 기능")
     
     # 탭으로 기능 분리
-    tab1, tab2, tab3, tab4 = st.tabs(["📁 실험 데이터", "📋 라인 분석", "🌡️ 파라미터 스윕", "💾 내보내기"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📁 실험 데이터", "📋 라인 분석", "🌡️ 파라미터 스윕", "🌊 CIA 분석", "💾 내보내기"])
     
     with tab1:
         # 실험 데이터 업로드 및 오버레이
@@ -983,6 +1062,93 @@ def main():
             st.info("💡 파라미터 스윕은 단일 분자 분석 모드에서만 사용 가능합니다.")
     
     with tab4:
+        # CIA (Collision-Induced Absorption) 분석
+        if CIA_ENABLED:
+            show_cia_info()
+            
+            if 'cia' in st.session_state.get('simulation_results', {}):
+                cia_results = st.session_state.simulation_results['cia']
+                wl_grid = st.session_state.get('wl_grid', [])
+                
+                if cia_results and len(wl_grid) > 0:
+                    total_cia = show_cia_analysis(cia_results, wl_grid)
+                    
+                    # CIA와 분자 라인 비교
+                    st.subheader("🔍 CIA vs 분자 라인 비교")
+                    
+                    # 분자 흡수와 CIA 흡수 비교 그래프
+                    fig_compare = go.Figure()
+                    
+                    # 분자 라인 흡수 추가
+                    total_molecular = np.zeros_like(wl_grid)
+                    for mol, spec in st.session_state.simulation_results.items():
+                        if mol not in ['cia', 'combined', 'combined_oa_icos'] and not mol.endswith('_oa_icos'):
+                            if isinstance(spec, dict) and 'absorbance' in spec:
+                                total_molecular += spec['absorbance']
+                    
+                    if len(total_molecular) > 0:
+                        fig_compare.add_trace(go.Scatter(
+                            x=wl_grid,
+                            y=total_molecular,
+                            name="분자 라인 흡수",
+                            line=dict(color='blue', width=2)
+                        ))
+                    
+                    # CIA 흡수 추가
+                    if total_cia is not None and len(total_cia) > 0:
+                        fig_compare.add_trace(go.Scatter(
+                            x=wl_grid,
+                            y=total_cia,
+                            name="CIA 흡수",
+                            line=dict(color='red', width=2)
+                        ))
+                        
+                        # 합계 표시
+                        if len(total_molecular) > 0:
+                            combined_total = total_molecular + total_cia
+                            fig_compare.add_trace(go.Scatter(
+                                x=wl_grid,
+                                y=combined_total,
+                                name="총 흡수 (라인 + CIA)",
+                                line=dict(color='purple', width=3, dash='dash')
+                            ))
+                    
+                    fig_compare.update_layout(
+                        title="분자 라인 흡수 vs CIA 흡수 비교",
+                        xaxis_title="파장 (nm)",
+                        yaxis_title="흡수도",
+                        height=500,
+                        hovermode='x unified'
+                    )
+                    
+                    st.plotly_chart(fig_compare, use_container_width=True)
+                    
+                    # CIA 기여도 정량 분석
+                    if len(total_molecular) > 0 and total_cia is not None:
+                        total_signal = np.sum(total_molecular)
+                        total_cia_signal = np.sum(total_cia)
+                        cia_contribution = (total_cia_signal / (total_signal + total_cia_signal)) * 100 if (total_signal + total_cia_signal) > 0 else 0
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("분자 라인 기여도", f"{100 - cia_contribution:.1f}%")
+                        with col2:
+                            st.metric("CIA 기여도", f"{cia_contribution:.1f}%")
+                        with col3:
+                            ratio = total_cia_signal / total_signal if total_signal > 0 else 0
+                            st.metric("CIA/라인 비율", f"{ratio:.3f}")
+                else:
+                    st.info("💡 CIA 결과가 없습니다. CIA 옵션을 활성화하고 시뮬레이션을 다시 실행하세요.")
+            else:
+                st.info("💡 CIA 분석을 위해 시뮬레이션을 먼저 실행하세요.")
+                
+                # CIA 데모 기능
+                st.markdown("---")
+                create_cia_demo()
+        else:
+            st.error("❌ CIA 모듈을 사용할 수 없습니다. 의존성을 확인하세요.")
+    
+    with tab5:
         # 결과 내보내기
         if ('simulation_results' in st.session_state and st.session_state.simulation_results and 
             'wl_grid' in st.session_state and st.session_state.wl_grid is not None):
