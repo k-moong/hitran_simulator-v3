@@ -1,1 +1,45 @@
- 
+# Virtual Environment
+hitran_env/
+venv/
+.venv/
+env/
+
+# Backup folders
+backup_*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE
+.vscode/settings.local.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# HITRAN data cache
+cache/*.gz
+cache/*.json
+
+# Large files
+*.pdf
+
+# Claude memory
+.claude/
