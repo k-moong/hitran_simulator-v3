@@ -10,6 +10,7 @@ from scipy import stats
 import sys
 import os
 import re
+import subprocess
 from collections import defaultdict
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -955,9 +956,24 @@ def show_line_shape_comparison():
         - **Hartmann-Tran**: 최고 정확도, 모든 물리적 효과 포함
         """)
 
+def get_version_info():
+    try:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        commit_hash = subprocess.check_output(
+            ['git', 'rev-parse', '--short', 'HEAD'], cwd=base, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        commit_date = subprocess.check_output(
+            ['git', 'log', '-1', '--format=%cd', '--date=format:%Y-%m-%d'], cwd=base, stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return commit_date, commit_hash
+    except Exception:
+        return "2025", "unknown"
+
 def main():
-    st.set_page_config(page_title="HITRAN Simulator (2025-07-09)", page_icon="🔬", layout="wide")
-    st.title("🔬 HITRAN Simulator (2025-07-09)")
+    commit_date, commit_hash = get_version_info()
+    version_str = f"{commit_date} ({commit_hash})"
+    st.set_page_config(page_title=f"HITRAN Simulator {version_str}", page_icon="🔬", layout="wide")
+    st.title(f"🔬 HITRAN Simulator — {version_str}")
 
     spectrometer_mode, mode, temp, wl_min, wl_max, molecules, molecule, c_min, c_max, c_steps, oa_icos_params, path, matrix_gas_params, molecule_concentrations, num_points, cia_config = show_sidebar()
     # 설정 요약 한 줄로 표시
